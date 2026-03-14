@@ -1,58 +1,69 @@
 <script>
-import JSONLab from './components/JSONLab.vue'
 import BHeader from './components/BHeader.vue'
 
 export default {
   name: 'App',
   components: {
     BHeader
-  },
-  methods: {
-    // Method to determine if the header should be shown
-    showHeader() {
-      // Check if the current route name includes 'CountBookAPI'
-      return this.$route.name !== 'CountBookAPI'
-    }
   }
 }
 </script>
 
 <template>
-  <div class="main-container">
-    <header v-if="showHeader()">
-      <BHeader />
-    </header>
-    <main class="main-box">
+  <div class="app-wrapper animated-bg">
+    <BHeader />
+    <main class="main-content z-10 relative">
       <router-view></router-view>
     </main>
   </div>
 </template>
 
-<style scoped>
-.center-content {
+<style>
+body,
+html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  color: #ffffff;
+}
+
+/* Deep, dark animated background for maximum contrast */
+.animated-bg {
+  min-height: 100vh;
+  background: linear-gradient(-45deg, #050510, #130b29, #1a103c, #0a0a1a);
+  background-size: 400% 400%;
+  animation: gradientBG 20s ease infinite;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: top;
-  min-height: 100vh;
-  text-align: left;
-  padding: 20px;
+  position: relative;
+  overflow-x: hidden;
 }
 
-h1 {
-  font-size: 2.5rem;
-  margin-bottom: 20px;
+@keyframes gradientBG {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
-p {
-  font-size: 1.2rem;
-  line-height: 1.6;
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.main-container {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  max-width: 80vw;
-  margin: 0 auto;
-  padding: 20px;
+/* Glassmorphism */
+.glass-panel {
+  background: rgba(15, 15, 25, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.6);
 }
 </style>

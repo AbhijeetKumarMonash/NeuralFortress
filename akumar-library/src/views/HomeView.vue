@@ -1,258 +1,210 @@
-<script setup>
-import { ref } from 'vue'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-
-const formData = ref({
-  username: '',
-  password: '',
-  confirmPassword: '',
-  isAustralian: false,
-  reason: '',
-  gender: '',
-  suburb: 'Clayton'
-})
-
-const submittedCards = ref([])
-
-const submitForm = () => {
-  validateName(true)
-  validatePassword(true)
-  validateConfirmPassword(true)
-  validateReason()
-  if (!errors.value.username && !errors.value.password && !errors.value.confirmPassword) {
-    submittedCards.value.push({ ...formData.value })
-    clearForm()
-  }
-}
-
-const clearForm = () => {
-  formData.value = {
-    username: '',
-    password: '',
-    isAustralian: false,
-    reason: '',
-    gender: ''
-  }
-}
-
-const errors = ref({
-  username: null,
-  password: null,
-  confirmPassword: null,
-  resident: null,
-  gender: null,
-  reason: null
-})
-
-const messages = ref({
-  reason: null
-})
-
-const validateName = (blur) => {
-  if (formData.value.username.length < 3) {
-    if (blur) errors.value.username = 'Name must be at least 3 characters'
-  } else {
-    errors.value.username = null
-  }
-}
-
-const validatePassword = (blur) => {
-  const password = formData.value.password
-  const minLength = 8
-  const hasUppercase = /[A-Z]/.test(password)
-  const hasLowercase = /[a-z]/.test(password)
-  const hasNumber = /\d/.test(password)
-  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password)
-
-  if (password.length < minLength) {
-    if (blur) errors.value.password = `Password must be at least ${minLength} characters long.`
-  } else if (!hasUppercase) {
-    if (blur) errors.value.password = 'Password must contain at least one uppercase letter.'
-  } else if (!hasLowercase) {
-    if (blur) errors.value.password = 'Password must contain at least one lowercase letter.'
-  } else if (!hasNumber) {
-    if (blur) errors.value.password = 'Password must contain at least one number.'
-  } else if (!hasSpecialChar) {
-    if (blur) errors.value.password = 'Password must contain at least one special character.'
-  } else {
-    errors.value.password = null
-  }
-}
-const validateConfirmPassword = (blur) => {
-  if (formData.value.password !== formData.value.confirmPassword) {
-    if (blur) errors.value.confirmPassword = 'Passwords do not match.'
-  } else {
-    errors.value.confirmPassword = null
-  }
-}
-
-const validateReason = () => {
-if(formData.value.reason.toLowerCase().includes('friend'))
-{
-  messages.value.reason = 'Great to have a friend'
-}
-else
-{
-messages.value.reason = null 
-}
-
-}
-</script>
-
 <template>
-  <!-- 🗄️ W3. Library Registration Form -->
-  <div class="container mt-5">
-    <div class="row">
-      <div class="col-md-8 offset-md-2">
-        <h1 class="text-center">🗄️ W5. Library Registration Form</h1>
-        <p class="text-center">
-          Let's build some more advanced features into our form.
-        </p>
-        <form @submit.prevent="submitForm">
-          <div class="row mb-3">
-            <div class="col-md-6 col-sm-6">
-              <label for="username" class="form-label">Username</label>
-              <input
-                type="text"
-                class="form-control"
-                id="username"
-                @blur="() => validateName(true)"
-                @input="() => validateName(false)"
-                v-model="formData.username"
-              />
-              <div v-if="errors.username" class="text-danger">{{ errors.username }}</div>
-            </div>
-            <div class="col-md-6 col-sm-6">
-              <label for="gender" class="form-label">Gender</label>
-              <select class="form-select" id="gender" v-model="formData.gender" required>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-          </div>
+  <div class="hero-section flex-grow-1 d-flex align-items-center py-5 position-relative">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
 
-          <div class="row mb-3">
-            <div class="col-md-6 col-sm-6">
-              <label for="password" class="form-label">Password</label>
-              <input
-                type="password"
-                class="form-control"
-                id="password"
-                @blur="() => validatePassword(true)"
-                @input="() => validatePassword(false)"
-                v-model="formData.password"
-              />
-              <div v-if="errors.password" class="text-danger">{{ errors.password }}</div>
-            </div>
-            <div class="col-md-6 col-sm-6">
-              <label for="confirm-password" class="form-label">Confirm password</label>
-              <input
-                type="password"
-                class="form-control"
-                id="confirm-password"
-                v-model="formData.confirmPassword"
-                @blur="() => validateConfirmPassword(true)"
-              />
-              <div v-if="errors.confirmPassword" class="text-danger">{{ errors.confirmPassword }}</div>
-            </div>
-            </div>
-          <div class="row mb-3">
-            <div class="col-md-6 col-sm-6">
-              <div class="form-check">
-                <input
-                  type="checkbox"
-                  class="form-check-input"
-                  id="isAustralian"
-                  v-model="formData.isAustralian"
-                />
-                <label class="form-check-label" for="isAustralian">Australian Resident?</label>
-              </div>
-            </div>
-          </div>
-          <div class="mb-3">
-            <label for="reason" class="form-label">Reason for joining</label>
-            <textarea
-              class="form-control"
-              id="reason"
-              rows="3"
-              v-model="formData.reason"
-              @input="validateReason"
-            ></textarea>
-            <div v-if="messages.reason" class="text-success">{{ messages.reason }} </div>
-          </div>
-          <div class="mb-3">
-            <label for="reason" class="form-label">Suburb</label>
-            <input type="text" class="form-control" id="suburb" v-bind:value="formData.suburb" />
-            </div>
-          <div class="text-center">
-            <button type="submit" class="btn btn-primary me-2">Submit</button>
-            <button type="button" class="btn btn-secondary" @click="clearForm">Clear</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+    <div class="container text-center z-10 position-relative">
+      <div class="badge-glow mb-4 mx-auto">v2.0 Architecture Online</div>
 
-  <div class="row mt-5">
-    <h4>This is a Primevue Datatable.</h4>
-    <DataTable :value="submittedCards" tableStyle="min-width: 50rem">
-      <Column field="username" header="Username"></Column>
-      <Column field="password" header="Password"></Column>
-      <Column field="isAustralian" header="Australian Resident"></Column>
-      <Column field="gender" header="Gender"></Column>
-      <Column field="reason" header="Reason"></Column>
-    </DataTable>
-  </div>
+      <h1 class="display-3 fw-black text-white mb-3 text-shadow">
+        Stop Taking Notes.<br />
+        <span class="text-gradient">Start Building an Engine of Thought.</span>
+      </h1>
+      <p class="lead text-light mb-5 mx-auto opacity-75" style="max-width: 650px">
+        NeuralFortress autonomously ingests, categorizes, and connects your research into a
+        hyper-intelligent knowledge matrix. No folders. No friction. Just pure recall.
+      </p>
 
-  <div class="row mt-5" v-if="submittedCards.length">
-    <div class="d-flex flex-wrap justify-content-start">
-      <div
-        v-for="(card, index) in submittedCards"
-        :key="index"
-        class="card m-2"
-        style="width: 18rem"
-      >
-        <div class="card-header">User Information</div>
-        <ul class="list-group list-group-flush">
-          <li class="list-group-item">Username: {{ card.username }}</li>
-          <li class="list-group-item">Password: {{ card.password }}</li>
-          <li class="list-group-item">
-            Australian Resident: {{ card.isAustralian ? 'Yes' : 'No' }}
-          </li>
-          <li class="list-group-item">Gender: {{ card.gender }}</li>
-          <li class="list-group-item">Reason: {{ card.reason }}</li>
-        </ul>
+      <div class="input-card glass-panel mx-auto rounded-4 p-2 text-start transition-hover">
+        <div class="p-3 border-bottom border-light-subtle d-flex align-items-center">
+          <div class="live-indicator me-2"></div>
+          <span class="text-white opacity-75 small fw-medium font-monospace"
+            >SYSTEM_READY // AWAITING_INPUT</span
+          >
+        </div>
+
+        <div class="p-4">
+          <textarea
+            class="custom-textarea form-control bg-transparent border-0 shadow-none fs-5 text-white"
+            placeholder="Drop your scattered thoughts, project links, or raw data here..."
+            rows="5"
+          ></textarea>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center p-3 rounded-bottom mt-2">
+          <span class="text-info small font-monospace"
+            ><i class="bi bi-cpu me-1"></i> AI Summarization Active</span
+          >
+          <button class="btn-action">Initialize Upload</button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-
-/* Class selectors */
-.form {
-  text-align: center;
-  margin-top: 50px;
+.fw-black {
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+}
+.text-shadow {
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
-/* ID selectors */
-#username:focus,
-#password:focus,
-#isAustralian:focus,
-.card {
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.text-gradient {
+  background: -webkit-linear-gradient(0deg, #00d2ff, #ff007f);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
-.card-header {
-  background-color: #275fda;
+
+.badge-glow {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 50px;
+  background: rgba(0, 210, 255, 0.1);
+  border: 1px solid rgba(0, 210, 255, 0.4);
+  color: #00d2ff;
+  font-weight: bold;
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+}
+
+.input-card {
+  max-width: 800px;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.transition-hover {
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
+}
+.transition-hover:hover {
+  transform: translateY(-5px);
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.4),
+    0 0 30px rgba(255, 0, 127, 0.2);
+}
+
+.custom-textarea {
+  outline: none !important;
+  resize: none;
+}
+.custom-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 300;
+}
+.custom-textarea:focus {
+  box-shadow: none;
   color: white;
-  padding: 10px;
-  border-radius: 10px 10px 0 0;
 }
-.list-group-item {
-  padding: 10px;
+
+.live-indicator {
+  width: 10px;
+  height: 10px;
+  background-color: #00ffcc;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #00ffcc;
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Neon Action Button */
+.btn-action {
+  background: linear-gradient(90deg, #ff007f, #6441a5);
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 50px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-action:hover {
+  box-shadow: 0 0 25px rgba(255, 0, 127, 0.6);
+  transform: scale(1.05);
+}
+
+/* Floating Orbs for deep background movement */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: 0;
+  opacity: 0.5;
+  animation: drift 20s infinite alternate;
+}
+.orb-1 {
+  width: 400px;
+  height: 400px;
+  background: #ff007f;
+  top: -100px;
+  left: -100px;
+}
+.orb-2 {
+  width: 500px;
+  height: 500px;
+  background: #00d2ff;
+  bottom: -150px;
+  right: -100px;
+  animation-delay: -5s;
+}
+
+@keyframes drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(100px, 150px) scale(1.2);
+  }
+}
+.custom-textarea {
+  outline: none !important;
+  resize: none;
+  color: #ffffff !important;
+}
+.custom-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 400;
+}
+.custom-textarea:focus {
+  box-shadow: none;
+  color: white;
+}
+
+.input-card {
+  max-width: 800px;
+  border-color: rgba(0, 210, 255, 0.3); /* Gives the input box a subtle cyan border */
+  background: rgba(10, 10, 18, 0.7); /* Darker glass for better text readability */
+}
+
+.btn-action {
+  background: linear-gradient(90deg, #ff007f, #6441a5);
+  color: white;
+  border: 1px solid rgba(255, 0, 127, 0.5);
+  padding: 12px 28px;
+  border-radius: 50px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+}
+.btn-action:hover {
+  box-shadow: 0 0 30px rgba(255, 0, 127, 0.8);
+  transform: scale(1.05);
 }
 </style>
