@@ -10,7 +10,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Connect to NEON  Database 
 engine=create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflash=False , bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False , bind=engine)
 
 #This is the base class for your database tables
 Base = declarative_base()
