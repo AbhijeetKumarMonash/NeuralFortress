@@ -43,6 +43,9 @@ class IngestRequest(BaseModel):
     text: str
     source: str = "manual_input"
 
+class SearchRequest(BaseModel):
+    query: str
+
 # 7. Root Route
 @app.get("/")
 async def root():
@@ -99,4 +102,57 @@ async def ingest_data(payload: IngestRequest, db: Session = Depends(get_db)):
 
     except Exception as e:
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+# 10. The Retrieval Agent (Chatting with your data)
+@app.post("/api/search")
+async def search_data(payload: SearchRequest, db: Session = Depends(get_db)):
+    try:
+        user_question = payload.query
+        
+        # Step A: Convert the user's question into math (a vector)
+        # We must use the exact same model and size (1536) as we did for saving
+        question_embedding_response = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=user_question,
+            config=types.EmbedContentConfig(output_dimensionality=1536)
+        )
+        question_vector = question_embedding_response.embeddings[0].values
+
+        # Step B: Search the Neon database for the closest matching notes
+        # It compares the math of the question to the math of the saved notes
+        similar_docs = db.query(models.Document).order_by(
+            models.Document.embedding.cosine_distance(question_vector)
+        ).limit(3).all()
+
+        if not similar_docs:
+            return {"answer": "I don't have any notes on this topic yet."}
+
+        # Step C: Combine the found notes into one big text block
+        context_text = "\n\n---\n\n".join([doc.content for doc in similar_docs])
+
+        # Step D: Ask Gemini to answer the question using ONLY those notes
+        prompt = f"""You are the AI brain of NeuralFortress. 
+        Answer the user's question using ONLY the context provided below. 
+        If the answer is not in the context, say "I cannot find this in your notes."
+        
+        Context from notes:
+        {context_text}
+        
+        User Question: {user_question}
+        """
+        
+        answer_response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+
+        return {
+            "status": "success",
+            "question": user_question,
+            "answer": answer_response.text,
+            "sources_used": len(similar_docs)
+        }
+
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
