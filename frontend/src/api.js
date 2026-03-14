@@ -27,5 +27,10 @@ export default {
     return apiClient.post('/search', {
       query: question
     });
+  },
+  // Fetch all saved memories from the database
+  getAllDocuments() {
+    return apiClient.get('/documents');
   }
+  
 };

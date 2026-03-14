@@ -103,7 +103,37 @@ async def ingest_data(payload: IngestRequest, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+# 11. The Memory Browser (Fetch all notes)
+@app.get("/api/documents")
+async def get_documents(db: Session = Depends(get_db)):
+    try:
+        # We fetch the ID, content, and creation date, explicitly LEAVING OUT the heavy 'embedding' column
+        docs = db.query(
+            models.Document.id, 
+            models.Document.content, 
+            models.Document.source, 
+            models.Document.created_at
+        ).order_by(models.Document.created_at.desc()).all()
+
+        # Format the data cleanly for the Vue frontend
+        formatted_docs = []
+        for doc in docs:
+            formatted_docs.append({
+                "id": doc.id,
+                "content": doc.content,
+                "source": doc.source,
+                "created_at": doc.created_at
+            })
+
+        return {
+            "status": "success",
+            "count": len(formatted_docs),
+            "documents": formatted_docs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # 10. The Retrieval Agent (Chatting with your data)
 @app.post("/api/search")
 async def search_data(payload: SearchRequest, db: Session = Depends(get_db)):
