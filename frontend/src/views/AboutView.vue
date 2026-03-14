@@ -33,7 +33,7 @@
           >
             <div class="image-overlay"></div>
             <img
-              src="C:\Users\Abhijeet\Akumar-library\akumar-library\src\assets\images\Gemini_Generated_Image_8b4yp18b4yp18b4y.png"
+              src="../assets/images/Gemini_Generated_Image_8b4yp18b4yp18b4y.png"
               alt="Neural Network Concept"
               class="img-fluid rounded-3 w-100"
               style="min-height: 450px; object-fit: cover"
