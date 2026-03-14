@@ -12,6 +12,8 @@
 
 **An Agentic Personal Knowledge Management System (PKMS) engineered for the modern intellect.** NeuralFortress solves the cognitive bottleneck of the information age. Instead of manually sorting research papers, cloud architecture diagrams, and fragmented code snippets into rigid hierarchical folders, this system autonomously ingests, summarizes, and semantically maps your data. It acts as an intelligence synthesizer, giving you absolute recall over your entire digital footprint at the speed of thought.
 
+Link: https://abhijeetkumarmonash.github.io/NeuralFortress/
+
 ## 🏗️ System Architecture
 
 NeuralFortress is designed as a modern, decoupled monorepo, utilizing a high-performance stack optimized for AI integration and rapid data retrieval.
