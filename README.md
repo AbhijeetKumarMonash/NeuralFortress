@@ -16,6 +16,8 @@ Link: https://abhijeetkumarmonash.github.io/NeuralFortress/
 
 ## 🏗️ System Architecture
 
+
+
 NeuralFortress is designed as a modern, decoupled monorepo, utilizing a high-performance stack optimized for AI integration and rapid data retrieval.
 
 - **Frontend:** Vue 3 + Vite, styled with a custom Vibrant Glassmorphism UI (Bootstrap underlying).
