@@ -19,6 +19,11 @@
           <p class="text-white fw-medium mb-3 flex-grow-1 fs-6">
             {{ doc.summary }}
           </p>
+          <div v-if="doc.insight && doc.insight !== 'New neural pathway created. No prior related memories found.'" class="p-2 mb-3 rounded bg-info bg-opacity-10 border-start border-info border-3">
+            <p class="text-info opacity-75 small mb-0 font-monospace">
+              <i class="bi bi-link-45deg"></i> {{ doc.insight }}
+            </p>
+          </div>
           
           <div class="mb-3 d-flex flex-wrap gap-2">
             <span v-for="(tag, index) in doc.tags" :key="index" class="badge bg-dark border border-info text-info font-monospace fw-normal p-2">
@@ -50,21 +55,30 @@ const fetchDocuments = async () => {
     const response = await api.getAllDocuments();
     
     documents.value = response.data.documents.map(doc => {
+      // Inside fetchDocuments mapping:
       let raw = doc.content;
       let summary = "No summary available.";
       let tags = [];
+      let insight = ""; // New variable
       
       if (raw.includes('AI_ANALYSIS:')) {
         const parts = raw.split('AI_ANALYSIS:\n');
         raw = parts[0].replace('RAW_TEXT:\n', '').trim();
         const aiPart = parts[1] || '';
         
+        // Extract Summary
         const summaryMatch = aiPart.match(/Summary:\s*(.*?)(?=\nTags:|$)/s);
         if (summaryMatch) summary = summaryMatch[1].trim();
         
+        // Extract Tags
         const tagsMatch = aiPart.match(/Tags:\s*\[(.*?)\]/);
         if (tagsMatch) {
           tags = tagsMatch[1].split(',').map(t => t.trim());
+        }
+        
+        // Extract Synthesis Insight
+        if (aiPart.includes('SYNTHESIS_INSIGHT:\n')) {
+            insight = aiPart.split('SYNTHESIS_INSIGHT:\n')[1].trim();
         }
       }
       
@@ -73,7 +87,8 @@ const fetchDocuments = async () => {
         date: new Date(doc.created_at).toLocaleDateString(),
         rawText: raw,
         summary: summary,
-        tags: tags
+        tags: tags,
+        insight: insight // Pass it to the template
       };
     });
   } catch (error) {

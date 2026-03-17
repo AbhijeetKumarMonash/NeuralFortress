@@ -54,19 +54,22 @@ const handleIngest = async () => {
   isProcessing.value = true;
   systemMessage.value = "Neural Core processing: Generating vectors and summaries...";
 
-  try {
-    const response = await api.ingestData(rawText.value);
-    systemMessage.value = `Success! Document ID ${response.data.document_id} assimilated.`;
-    rawText.value = ''; 
-    
-    // Tell the parent component to update the grid!
-    emit('document-ingested');
-    
-    setTimeout(() => {
-      systemMessage.value = '';
-    }, 4000);
+ try {
+      const response = await api.ingestData(rawText.value);
+      
+      // Update the system message to show the Synthesis Insight
+      systemMessage.value = `[DOC_${response.data.document_id} ASSIMILATED] Insight: ${response.data.insight}`;
+      rawText.value = ''; 
+      
+      // Tell the parent component to update the grid
+      emit('document-ingested');
+      
+      // We will leave the insight on the screen a bit longer (8 seconds) so you can read it
+      setTimeout(() => {
+        systemMessage.value = '';
+      }, 8000);
 
-  } catch (error) {
+    } catch (error) {
     console.error("Ingestion error:", error);
     systemMessage.value = "CRITICAL ERROR: Failed to communicate with backend.";
   } finally {
