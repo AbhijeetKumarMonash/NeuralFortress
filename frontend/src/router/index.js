@@ -13,6 +13,7 @@ const routes = [
     name: 'About',
     component: AboutView
   }
+
 ]
 
 const router = createRouter({

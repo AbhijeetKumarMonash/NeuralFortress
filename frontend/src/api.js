@@ -31,6 +31,15 @@ export default {
   // Fetch all saved memories from the database
   getAllDocuments() {
     return apiClient.get('/documents');
+  },
+  getGraph(threshold = 0.55) {
+    return apiClient.get(`/graph?threshold=${threshold}`);
+},
+deleteDocument(id) {
+    return apiClient.delete(`/documents/${id}`);
+},
+askAgent(question) {
+   return apiClient.post('/agent', { query: question }); 
   }
   
 };
