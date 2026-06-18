@@ -61,44 +61,43 @@ async def get_status():
         "message": "Neural Core Initialized and Running"
     }
 # 9. The Data Ingestion Route (now with Agentic Synthesis)
-MAX_EMBED_CHARS = 6000  # gemini-embedding-001 input limit is ~2048 tokens
+MAX_EMBED_CHARS = 1800  # safe per-chunk size, well under the ~2,048-token limit
 
 @app.post("/api/ingest")
 async def ingest_data(payload: IngestRequest, db: Session = Depends(get_db)):
     try:
         raw_text = payload.text
-        embed_text = raw_text[:MAX_EMBED_CHARS]  # FIX: prevents 500 on long pastes
 
-        # A: Summary + tags (format must stay EXACT — the Vue parser depends on it)
+        # A: chunk (1 chunk for short notes -> identical to old behaviour)
+        chunks = kg.chunk_text(raw_text, max_chars=MAX_EMBED_CHARS, overlap_chars=200)
+        if not chunks:
+            raise HTTPException(status_code=400, detail="Empty text")
+
+        # B: embed each chunk, then document vector = mean of chunk vectors
+        chunk_vectors = kg.embed_texts(client, chunks)
+        doc_vector = np.mean(np.array(chunk_vectors, dtype=float), axis=0).tolist()
+
+        # C: summary + tags (format must stay EXACT for the Vue parser)
         summary_prompt = (
             "Analyze the following text. Provide a 2-sentence summary and extract 3-5 tags. "
             "Format EXACTLY as:\nSummary: [text]\nTags: [tag1, tag2, tag3]\n\n"
-            f"Text: {raw_text}"
+            f"Text: {raw_text[:12000]}"
         )
         ai_summary = client.models.generate_content(
             model='gemini-2.5-flash', contents=summary_prompt
         ).text
 
-        # B: Embed the new note (truncated to stay under the model's input limit)
-        vector_math = client.models.embed_content(
-            model="gemini-embedding-001",
-            contents=embed_text,
-            config=types.EmbedContentConfig(output_dimensionality=1536)
-        ).embeddings[0].values
-
-        # C: AGENTIC SYNTHESIS — retrieve related memories, reason about the link
+        # D: synthesis-on-ingest (unchanged) using the document vector
         related = db.query(models.Document).order_by(
-            models.Document.embedding.cosine_distance(vector_math)
+            models.Document.embedding.cosine_distance(doc_vector)
         ).limit(3).all()
-
         if related:
-            context = "\n\n---\n\n".join(d.content[:2000] for d in related)
+            ctx = "\n\n---\n\n".join(d.content[:2000] for d in related)
             synthesis_prompt = (
                 "You are the synthesis engine of a second brain. A new note is being ingested. "
-                "Compare it to the related existing memories below. In ONE concise sentence, state "
-                "the most interesting connection, overlap, or contradiction. Start with a verb "
-                "(e.g. 'Connects to...', 'Contradicts...', 'Extends...').\n\n"
-                f"EXISTING MEMORIES:\n{context}\n\nNEW NOTE:\n{raw_text[:4000]}"
+                "Compare it to the related memories below. In ONE concise sentence, state the most "
+                "interesting connection, overlap, or contradiction. Start with a verb.\n\n"
+                f"EXISTING MEMORIES:\n{ctx}\n\nNEW NOTE:\n{raw_text[:4000]}"
             )
             insight = client.models.generate_content(
                 model='gemini-2.5-flash', contents=synthesis_prompt
@@ -106,15 +105,31 @@ async def ingest_data(payload: IngestRequest, db: Session = Depends(get_db)):
         else:
             insight = "New neural pathway created. No prior related memories found."
 
-        # D: Persist — SYNTHESIS_INSIGHT block is what MatrixArchive.vue parses
+        # E: persist the document (same content format as before)
         new_document = models.Document(
             content=(f"RAW_TEXT:\n{raw_text}\n\n"
                      f"AI_ANALYSIS:\n{ai_summary}\n\n"
                      f"SYNTHESIS_INSIGHT:\n{insight}"),
             source=payload.source,
-            embedding=vector_math
+            embedding=doc_vector,
         )
         db.add(new_document)
+        db.flush()  # get new_document.id
+
+        # F: persist chunks
+        for i, (c_text, c_vec) in enumerate(zip(chunks, chunk_vectors)):
+            db.add(models.DocumentChunk(
+                document_id=new_document.id, chunk_index=i, content=c_text, embedding=c_vec
+            ))
+
+        # G: GraphRAG extraction (entities + relationships). Never break ingest on failure.
+        ents_n, rels_n = 0, 0
+        try:
+            triples = kg.extract_triples(client, raw_text)
+            ents_n, rels_n = kg.store_triples(db, models, triples, new_document.id)
+        except Exception as ge:
+            print(f"[GRAPH INGEST WARN] {repr(ge)}")
+
         db.commit()
         db.refresh(new_document)
 
@@ -122,12 +137,16 @@ async def ingest_data(payload: IngestRequest, db: Session = Depends(get_db)):
             "status": "success",
             "message": "Data successfully ingested and stored.",
             "document_id": new_document.id,
-            "insight": insight,  # IngestionEngine.vue already displays this
+            "insight": insight,
+            "chunks": len(chunks),
+            "entities_extracted": ents_n,
+            "relationships_extracted": rels_n,
         }
-
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        print(f"[INGEST ERROR] {repr(e)}")  # always see the real error in terminal
+        print(f"[INGEST ERROR] {repr(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # 11. The Memory Browser (Fetch all notes)
@@ -310,4 +329,74 @@ async def agent_query(payload: SearchRequest, db: Session = Depends(get_db)):
         return {"status": "success", "question": payload.query,
                 "answer": response.text, "agent_steps": steps}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/graphrag")
+async def graphrag_query(payload: SearchRequest, db: Session = Depends(get_db)):
+    try:
+        # 1) seed entities from the question
+        names = kg.extract_query_entities(client, payload.query)
+        seed_ids = []
+        for n in names:
+            norm = " ".join(n.strip().lower().split())
+            ent = db.query(models.Entity).filter(models.Entity.norm_name == norm).first()
+            if ent:
+                seed_ids.append(ent.id)
+
+        # 2) fallback: vector-search entry documents -> their entities
+        if not seed_ids:
+            qvec = client.models.embed_content(
+                model="gemini-embedding-001", contents=payload.query,
+                config=types.EmbedContentConfig(output_dimensionality=1536)
+            ).embeddings[0].values
+            top_docs = db.query(models.Document).order_by(
+                models.Document.embedding.cosine_distance(qvec)).limit(3).all()
+            doc_ids = [d.id for d in top_docs]
+            if doc_ids:
+                for r in db.query(models.Relationship).filter(
+                        models.Relationship.document_id.in_(doc_ids)).limit(20).all():
+                    seed_ids.extend([r.source_id, r.target_id])
+            seed_ids = list(set(seed_ids))
+
+        if not seed_ids:
+            return {"answer": "No entities for this query yet — ingest more documents.",
+                    "reasoning_path": [], "entities": [], "hops": 0, "source_documents": []}
+
+        # 3) multi-hop traversal
+        rels, entity_ids = kg.multi_hop_subgraph(db, models, seed_ids, max_hops=2)
+
+        # 4) resolve names + supporting documents
+        ent_map = {e.id: e for e in db.query(models.Entity).filter(
+            models.Entity.id.in_(entity_ids)).all()}
+        path, doc_ids = [], set()
+        for r in rels:
+            s, o = ent_map.get(r.source_id), ent_map.get(r.target_id)
+            if s and o:
+                path.append({"from": s.name, "predicate": r.predicate, "to": o.name})
+            if r.document_id:
+                doc_ids.add(r.document_id)
+
+        docs = db.query(models.Document).filter(models.Document.id.in_(doc_ids)).all() if doc_ids else []
+        notes = "\n\n---\n\n".join(d.content[:1500] for d in docs)
+        triples_text = "\n".join(f"- {p['from']} --{p['predicate']}--> {p['to']}" for p in path)
+
+        # 5) answer by walking the path
+        prompt = (
+            "You are a GraphRAG engine. Answer the QUESTION using the KNOWLEDGE GRAPH PATH and "
+            "SUPPORTING NOTES. When relevant, explain the answer by walking the connection path "
+            "across multiple hops. If the path lacks the answer, say so plainly.\n\n"
+            f"QUESTION: {payload.query}\n\nKNOWLEDGE GRAPH PATH:\n{triples_text}\n\nSUPPORTING NOTES:\n{notes}"
+        )
+        answer = client.models.generate_content(
+            model='gemini-2.5-flash', contents=prompt).text
+
+        return {
+            "answer": answer,
+            "reasoning_path": path[:25],
+            "entities": [ent_map[i].name for i in entity_ids if i in ent_map][:30],
+            "hops": 2,
+            "source_documents": sorted(doc_ids),
+        }
+    except Exception as e:
+        print(f"[GRAPHRAG ERROR] {repr(e)}")
         raise HTTPException(status_code=500, detail=str(e))
