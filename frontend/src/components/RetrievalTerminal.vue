@@ -1,12 +1,41 @@
 <template>
-  <div class="input-card glass-panel mx-auto rounded-4 p-4 mt-5 text-start">
-    <h4 class="text-white mb-3 mt-0 fs-5 font-monospace">_QUERY_THE_MATRIX</h4>
+  <div class="input-card glass-panel mx-auto rounded-4 p-4 mt-4 text-start">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <h4 class="text-white mb-0 fs-5 font-monospace">_QUERY_THE_MATRIX</h4>
+
+      <!-- MODE TOGGLE: classic RAG pipeline vs autonomous agent -->
+      <div class="mode-toggle d-inline-flex p-1 rounded-pill">
+        <button
+          class="mode-btn font-monospace"
+          :class="{ active: mode === 'rag' }"
+          @click="mode = 'rag'"
+        >
+          RAG_MODE
+        </button>
+        <button
+          class="mode-btn font-monospace"
+          :class="{ active: mode === 'agent' }"
+          @click="mode = 'agent'"
+        >
+          AGENT_MODE
+        </button>
+      </div>
+    </div>
+
+    <p class="text-secondary small font-monospace mb-3">
+      {{
+        mode === 'agent'
+          ? '>> Autonomous mode: Gemini decides which tools to call and may search multiple times.'
+          : '>> Pipeline mode: fixed embed → retrieve top-3 → answer.'
+      }}
+    </p>
+
     <div class="d-flex gap-2 mb-3">
-      <input 
-        v-model="searchQuery" 
+      <input
+        v-model="searchQuery"
         @keyup.enter="handleSearch"
-        type="text" 
-        class="form-control bg-transparent border-light-subtle text-white custom-input" 
+        type="text"
+        class="form-control bg-transparent border-light-subtle text-white custom-input"
         placeholder="Ask your notes anything..."
         :disabled="isSearching"
       />
@@ -14,19 +43,32 @@
         {{ isSearching ? 'Searching...' : 'Search' }}
       </button>
     </div>
-    
-    <div v-if="isSearching || displayedResponse" class="terminal-container p-4 mt-4 rounded-3 position-relative overflow-hidden">
+
+    <div
+      v-if="isSearching || displayedResponse"
+      class="terminal-container p-4 mt-4 rounded-3 position-relative overflow-hidden"
+    >
       <div class="scanline"></div>
-      
-      <div class="terminal-header d-flex align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-50">
+
+      <div
+        class="terminal-header d-flex align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-50"
+      >
         <div class="terminal-dot bg-danger"></div>
         <div class="terminal-dot bg-warning"></div>
         <div class="terminal-dot bg-success"></div>
-        <span class="ms-3 text-secondary small font-monospace">sys.vidya@neural-core:~$ run retrieval_agent.sh</span>
+        <span class="ms-3 text-secondary small font-monospace">
+          sys.vidya@neural-core:~$ run {{ mode === 'agent' ? 'autonomous_agent.sh' : 'rag_pipeline.sh' }}
+        </span>
       </div>
-      
+
       <div class="terminal-body font-monospace">
-        <span v-if="isSearching" class="pulsing-text text-info">>> Accessing high-dimensional vector space...</span>
+        <span v-if="isSearching" class="pulsing-text text-info">
+          {{
+            mode === 'agent'
+              ? '>> Agent reasoning: selecting tools...'
+              : '>> Accessing high-dimensional vector space...'
+          }}
+        </span>
         <span v-else class="text-success">{{ displayedResponse }}</span>
         <span class="cursor" v-if="!isSearching">_</span>
       </div>
@@ -40,14 +82,15 @@ import api from '@/api';
 
 const searchQuery = ref('');
 const isSearching = ref(false);
-const displayedResponse = ref(''); 
+const displayedResponse = ref('');
+const mode = ref('agent'); // default to the showpiece
 let typingInterval = null;
 
 const typeWriterEffect = (text) => {
   displayedResponse.value = '';
   clearInterval(typingInterval);
   let i = 0;
-  
+
   typingInterval = setInterval(() => {
     if (i < text.length) {
       displayedResponse.value += text.charAt(i);
@@ -55,27 +98,37 @@ const typeWriterEffect = (text) => {
     } else {
       clearInterval(typingInterval);
     }
-  }, 15); 
+  }, 12);
 };
 
 const handleSearch = async () => {
   if (!searchQuery.value.trim()) return;
-  
+
   isSearching.value = true;
-  displayedResponse.value = ''; 
-  clearInterval(typingInterval); 
-  
+  displayedResponse.value = '';
+  clearInterval(typingInterval);
+
   try {
-    const response = await api.searchNotes(searchQuery.value);
-    typeWriterEffect(response.data.answer);
+    let text;
+    if (mode.value === 'agent') {
+      const response = await api.askAgent(searchQuery.value);
+      const steps = response.data.agent_steps || [];
+      text = steps.length
+        ? `[AGENT TOOL CALLS: ${steps.join(' → ')}]\n\n${response.data.answer}`
+        : response.data.answer;
+    } else {
+      const response = await api.searchNotes(searchQuery.value);
+      text = response.data.answer;
+    }
+    typeWriterEffect(text);
   } catch (error) {
-    typeWriterEffect("CRITICAL ERROR: Could not retrieve data from the Neural Matrix.");
+    console.error('Query error:', error);
+    typeWriterEffect('CRITICAL ERROR: Could not retrieve data from the Neural Matrix.');
   } finally {
     isSearching.value = false;
   }
 };
 
-// Clean up the interval if the component is destroyed
 onUnmounted(() => {
   if (typingInterval) clearInterval(typingInterval);
 });
@@ -88,6 +141,30 @@ onUnmounted(() => {
   background: rgba(10, 10, 18, 0.7);
 }
 
+.mode-toggle {
+  background: rgba(5, 5, 8, 0.8);
+  border: 1px solid rgba(0, 210, 255, 0.25);
+}
+
+.mode-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 6px 16px;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.mode-btn.active {
+  background: rgba(0, 210, 255, 0.15);
+  color: #00d2ff;
+  border: 1px solid rgba(0, 210, 255, 0.5);
+}
+
 .custom-input {
   outline: none !important;
   box-shadow: none !important;
@@ -97,7 +174,6 @@ onUnmounted(() => {
   border-color: #00d2ff !important;
 }
 
-/* Terminal UI Styles */
 .terminal-container {
   background-color: #050508;
   border: 1px solid rgba(0, 210, 255, 0.2);
@@ -114,7 +190,7 @@ onUnmounted(() => {
 .terminal-body {
   font-size: 0.95rem;
   line-height: 1.6;
-  white-space: pre-wrap; 
+  white-space: pre-wrap;
 }
 
 .cursor {
@@ -144,17 +220,31 @@ onUnmounted(() => {
 }
 
 @keyframes cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 @keyframes scan {
-  0% { top: -5px; }
-  100% { top: 100%; }
+  0% {
+    top: -5px;
+  }
+  100% {
+    top: 100%;
+  }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 </style>
