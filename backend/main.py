@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types # Added to configure the embedding size
 import numpy as np
+import knowledge_graph as kg
 
 from database import engine, Base, get_db
 import models
