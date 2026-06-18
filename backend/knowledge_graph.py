@@ -82,11 +82,15 @@ def extract_triples(client, text):
         "Extract knowledge-graph triples from the TEXT. Return STRICT JSON only, no markdown.\n"
         'Schema: {"triples":[{"subject":str,"subject_type":str,"predicate":str,'
         '"object":str,"object_type":str}]}\n'
-        "Rules:\n"
-        "- subject/object are concise canonical entity names (max 4 words).\n"
-        "- predicate is a short verb phrase (1-3 words), e.g. 'orchestrates', 'wrote', 'depends on'.\n"
-        "- subject_type/object_type must each be one of: PERSON, ORG, TECHNOLOGY, CONCEPT, PLACE, EVENT, OTHER.\n"
-        "- Extract 3-15 of the MOST important, factual relationships. Skip vague filler.\n\n"
+       "Rules:\n"
+        "- Prefer CONCEPTUAL and CAUSAL relationships (influences, predicts, contradicts, "
+        "depends on, enables, references) over trivia.\n"
+        "- AVOID trivial attributes: dates, job titles, nationalities, 'was a', 'is a'.\n"
+        "- subject/object are concise canonical entity names (max 4 words). Reuse the SAME name "
+        "for the same concept so entities merge across documents.\n"
+        "- predicate is a short verb phrase (1-3 words).\n"
+        "- types: PERSON, ORG, TECHNOLOGY, CONCEPT, PLACE, EVENT, OTHER.\n"
+        "- Extract 3-12 of the MOST important relationships. Quality over quantity.\n\n"
         f"TEXT:\n{(text or '')[:12000]}"
     )
     try:

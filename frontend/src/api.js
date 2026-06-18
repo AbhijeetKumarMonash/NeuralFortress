@@ -40,6 +40,13 @@ deleteDocument(id) {
 },
 askAgent(question) {
    return apiClient.post('/agent', { query: question }); 
-  }
+  },
+  askGraphRAG(query) 
+  {
+     return apiClient.post('/graphrag', { query });
+     },
+getKnowledgeGraph() {
+   return apiClient.get('/knowledge-graph');
+   }
   
 };

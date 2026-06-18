@@ -19,16 +19,13 @@
         >
           AGENT_MODE
         </button>
+        <button class="mode-btn font-monospace" :class="{ active: mode === 'graph' }" @click="mode = 'graph'">
+  GRAPH_MODE
+</button>
       </div>
     </div>
 
-    <p class="text-secondary small font-monospace mb-3">
-      {{
-        mode === 'agent'
-          ? '>> Autonomous mode: Gemini decides which tools to call and may search multiple times.'
-          : '>> Pipeline mode: fixed embed → retrieve top-3 → answer.'
-      }}
-    </p>
+    <p class="text-secondary small font-monospace mb-3">{{ modeBlurb }}</p>
 
     <div class="d-flex gap-2 mb-3">
       <input
@@ -77,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref, onUnmounted } from 'vue';
+import { ref, onUnmounted , computed } from 'vue';
 import api from '@/api';
 
 const searchQuery = ref('');
@@ -85,6 +82,13 @@ const isSearching = ref(false);
 const displayedResponse = ref('');
 const mode = ref('agent'); // default to the showpiece
 let typingInterval = null;
+const emit = defineEmits(['graph-result']);
+
+const modeBlurb = computed(() => ({
+  agent: '>> Autonomous mode: Gemini decides which tools to call and may search multiple times.',
+  graph: '>> GraphRAG mode: traverses entity relationships across documents — multi-hop, beyond vector distance.',
+  rag: '>> Pipeline mode: fixed embed → retrieve top-3 → answer.'
+}[mode.value]));
 
 const typeWriterEffect = (text) => {
   displayedResponse.value = '';
@@ -116,7 +120,15 @@ const handleSearch = async () => {
       text = steps.length
         ? `[AGENT TOOL CALLS: ${steps.join(' → ')}]\n\n${response.data.answer}`
         : response.data.answer;
-    } else {
+    }
+     else if (mode.value === 'graph') {
+  const r = await api.askGraphRAG(searchQuery.value);
+  const path = r.data.reasoning_path || [];
+  const hops = path.map(p => `${p.from} --${p.predicate}--> ${p.to}`).join('\n');
+  text = hops ? `[GRAPH PATH · ${r.data.hops} hops · docs ${ (r.data.source_documents||[]).join(', ') }]\n${hops}\n\n${r.data.answer}` : r.data.answer;
+  emit('graph-result', { entities: r.data.entities || [], path });
+}
+    else {
       const response = await api.searchNotes(searchQuery.value);
       text = response.data.answer;
     }

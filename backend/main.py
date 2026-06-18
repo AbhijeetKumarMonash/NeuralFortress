@@ -400,3 +400,21 @@ async def graphrag_query(payload: SearchRequest, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"[GRAPHRAG ERROR] {repr(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/knowledge-graph")
+async def knowledge_graph_view(db: Session = Depends(get_db)):
+    type_color = {"PERSON": "#FF007F", "ORG": "#FFB000", "TECHNOLOGY": "#00D2FF",
+                  "CONCEPT": "#27E0A6", "PLACE": "#9B6BFF", "EVENT": "#FF6B6B", "OTHER": "#9AA2B8"}
+    ents = db.query(models.Entity).all()
+    rels = db.query(models.Relationship).all()
+    nodes = [{"id": e.id, "label": e.name, "group": e.type,
+              "color": type_color.get(e.type, "#9AA2B8")} for e in ents]
+    seen, edges = set(), []
+    for r in rels:
+        key = (r.source_id, r.target_id, (r.predicate or "").lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        edges.append({"from": r.source_id, "to": r.target_id, "label": r.predicate})
+    return {"nodes": nodes, "edges": edges,
+            "entity_count": len(nodes), "relationship_count": len(edges)}

@@ -34,8 +34,12 @@
       </div>
 
       <div v-show="activeTab === 'query'">
-        <RetrievalTerminal />
-      </div>
+  <RetrievalTerminal @graph-result="onGraphResult" />
+</div>
+
+<div v-show="activeTab === 'knowledge'">
+  <EntityGraph ref="entityGraphRef" />
+</div>
 
       <div v-show="activeTab === 'map'">
         <KnowledgeGraph ref="graphRef" @node-selected="openDocFromGraph" />
@@ -49,22 +53,35 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch , nextTick } from 'vue';
 import IngestionEngine from '@/components/IngestionEngine.vue';
 import RetrievalTerminal from '@/components/RetrievalTerminal.vue';
 import MatrixArchive from '@/components/MatrixArchive.vue';
 import KnowledgeGraph from '@/components/KnowledgeGraph.vue';
+import EntityGraph from '@/components/EntityGraph.vue';
 
 const tabs = [
   { id: 'ingest', label: '_INGEST' },
   { id: 'query', label: '_QUERY' },
   { id: 'map', label: '_NEURAL_MAP' },
-  { id: 'archive', label: '_ARCHIVE' }
+  { id: 'archive', label: '_ARCHIVE' },
+  { id: 'knowledge', label: '_KNOWLEDGE' }
 ];
 
 const activeTab = ref('ingest');
 const archiveRef = ref(null);
 const graphRef = ref(null);
+const entityGraphRef = ref(null);
+
+const onGraphResult = (payload) => {
+  activeTab.value = 'knowledge';
+  nextTick(() => {
+    if (entityGraphRef.value) {
+      entityGraphRef.value.fitView();
+      entityGraphRef.value.highlightPath(payload.entities, payload.path);
+    }
+  });
+};
 
 // Refresh graph only
 const refreshGraph = () => {
