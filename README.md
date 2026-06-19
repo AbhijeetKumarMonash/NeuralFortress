@@ -136,8 +136,8 @@ NeuralFortress/
 
 ## 📚 Documentation
 
-Full version history lives in the [Wiki](../../wiki):
-**[v1 — Foundation](../../wiki/Version-1-Foundation)** · **[v2 — Beyond RAG](../../wiki/Version-2-Beyond-RAG)** · **[v3 — The Knowledge Graph](../../wiki/Version-3-The-Knowledge-Graph)**
+Full version history lives in the [Wiki](https://github.com/AbhijeetKumarMonash/NeuralFortress/wiki):
+**[v1 — Foundation](https://github.com/AbhijeetKumarMonash/NeuralFortress/wiki/Version-1-Foundation)** · **[v2 — Beyond RAG](https://github.com/AbhijeetKumarMonash/NeuralFortress/wiki/Version-2-Beyond-RAG)** · **[v3 — The Knowledge Graph](https://github.com/AbhijeetKumarMonash/NeuralFortress/wiki/Version-3-The-Knowledge-Graph)**
 
 ---
 
