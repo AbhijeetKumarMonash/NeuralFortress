@@ -26,6 +26,11 @@
             configuration step you read in February with a deployment issue you face in October, a
             search bar looking for exact keywords fails you.
           </p>
+          <p class="text-white opacity-75 fs-5 lh-base mb-0">
+            <strong>Our answer:</strong> a system that doesn't just <em>store</em> knowledge, but
+            actively <em>thinks</em> about it &mdash; reasoning over what you save the moment you
+            save it, and discovering the connections you never explicitly drew.
+          </p>
         </div>
         <div class="col-lg-6">
           <div
@@ -53,20 +58,26 @@
               <i class="bi bi-cpu text-info me-2"></i>What It Does
             </h3>
             <p class="text-white opacity-75 fs-5 lh-base mb-3">
-              NeuralFortress is an Agentic Personal Knowledge Management System (PKMS). You simply
-              drop raw, unformatted text, URLs, or code into the system.
+              NeuralFortress is an Agentic Personal Knowledge Management System (PKMS). You drop in
+              raw, unformatted text, documents, or code &mdash; of any length &mdash; and the system
+              takes over.
             </p>
-            <ul class="text-white opacity-75 fs-5 lh-base ps-3">
+            <ul class="text-white opacity-75 fs-5 lh-base ps-3 mb-0">
               <li class="mb-2">
-                <strong>Autonomous Ingestion:</strong> Background AI reads and summarizes the data.
+                <strong>Autonomous Ingestion:</strong> Gemini summarizes and tags every note; large
+                documents are chunked automatically so nothing is too big to absorb.
               </li>
               <li class="mb-2">
-                <strong>Semantic Embedding:</strong> It converts text into high-dimensional vectors
-                (math).
+                <strong>Synthesis-on-Ingest:</strong> The moment you save, it compares the note to
+                what you already know and surfaces the connection &mdash; unprompted.
               </li>
               <li class="mb-2">
-                <strong>RAG Retrieval:</strong> You chat with the system. It searches your vectors
-                and generates precise answers based <em>only</em> on your past data.
+                <strong>Semantic Embedding:</strong> Text becomes high-dimensional vectors stored in
+                pgvector, so recall works on <em>meaning</em>, not keywords.
+              </li>
+              <li class="mb-2">
+                <strong>Three Ways to Ask:</strong> classic RAG, an autonomous tool-calling Agent,
+                and GraphRAG that walks relationships across documents.
               </li>
             </ul>
           </div>
@@ -80,125 +91,144 @@
             <p class="text-white opacity-75 fs-5 lh-base mb-3">
               Human capital should be spent on synthesis, not sorting.
             </p>
-            <p class="text-white opacity-75 fs-5 lh-base">
+            <p class="text-white opacity-75 fs-5 lh-base mb-0">
               You are building quantum computing roadmaps, studying for AWS certifications, and
               deploying Docker containers. The sheer volume of technical syntax is impossible to
-              memorize. NeuralFortress acts as a secure, infallible "Second Brain" that scales
-              infinitely with your ambitions. It eliminates friction between learning and recalling.
+              memorize. NeuralFortress acts as a secure, infallible &ldquo;Second Brain&rdquo; that
+              not only recalls your past data, but <em>reasons</em> across it &mdash; mapping the
+              multi-hop links between ideas a simple search would never find. It eliminates the
+              friction between learning, recalling, and <em>connecting</em>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mb-5 pb-5 g-5 border-bottom border-secondary border-opacity-50">
+        <div class="col-12 text-center mb-4">
+          <h2 class="fw-bold text-gradient">Beyond RAG: The Three Minds</h2>
+          <p class="text-white opacity-50 fs-5 mt-2 mb-0">
+            One knowledge base, three distinct ways to interrogate it.
+          </p>
+        </div>
+
+        <div class="col-md-4">
+          <div class="glass-panel p-4 h-100 rounded-4 mind-card">
+            <span class="mode-tag text-info">RAG_MODE</span>
+            <h4 class="text-white fw-bold my-3">The Librarian</h4>
+            <p class="text-white opacity-75 lh-base m-0">
+              A fixed pipeline: embed your question, retrieve the three closest memories, answer
+              strictly from them. Fast, cheap, deterministic.
+            </p>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="glass-panel p-4 h-100 rounded-4 mind-card mind-card-pink">
+            <span class="mode-tag text-pink">AGENT_MODE</span>
+            <h4 class="text-white fw-bold my-3">The Investigator</h4>
+            <p class="text-white opacity-75 lh-base m-0">
+              Gemini is handed tools and decides for itself which to call, reformulating its own
+              queries and searching again until it has enough to answer.
+            </p>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="glass-panel p-4 h-100 rounded-4 mind-card">
+            <span class="mode-tag text-info">GRAPH_MODE</span>
+            <h4 class="text-white fw-bold my-3">The Cartographer</h4>
+            <p class="text-white opacity-75 lh-base m-0">
+              Traverses a graph of entities and relationships extracted from your notes &mdash;
+              multi-hop, across documents, reaching links that pure vector distance cannot.
             </p>
           </div>
         </div>
       </div>
 
       <div class="mb-5 pb-5 border-bottom border-secondary border-opacity-50 text-center">
-        <h2 class="fw-bold text-gradient mb-5">Architecture & Data Flow</h2>
+        <h2 class="fw-bold text-gradient mb-5">Architecture &amp; Data Flow</h2>
         <div class="glass-panel rounded-4 p-5 text-center position-relative overflow-hidden">
           <svg
             class="w-100"
-            height="200"
-            viewBox="0 0 1000 200"
+            height="260"
+            viewBox="0 0 1000 260"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >
+            <!-- 1. Raw Input -->
             <rect
-              x="50"
-              y="70"
-              width="160"
-              height="60"
-              rx="8"
-              fill="rgba(255,255,255,0.05)"
-              stroke="#00D2FF"
-              stroke-width="2"
+              x="40" y="100" width="150" height="60" rx="8"
+              fill="rgba(255,255,255,0.05)" stroke="#00D2FF" stroke-width="2"
             />
-            <text
-              x="130"
-              y="105"
-              fill="white"
-              font-size="16"
-              font-family="monospace"
-              text-anchor="middle"
-            >
+            <text x="115" y="135" fill="white" font-size="15" font-family="monospace" text-anchor="middle">
               1. Raw Input
             </text>
 
+            <!-- 2. AI Agent -->
             <rect
-              x="420"
-              y="50"
-              width="160"
-              height="100"
-              rx="8"
-              fill="rgba(255, 0, 127, 0.15)"
-              stroke="#FF007F"
-              stroke-width="2"
+              x="350" y="80" width="170" height="100" rx="8"
+              fill="rgba(255, 0, 127, 0.15)" stroke="#FF007F" stroke-width="2"
             />
-            <text
-              x="500"
-              y="95"
-              fill="white"
-              font-size="18"
-              font-weight="bold"
-              text-anchor="middle"
-            >
+            <text x="435" y="118" fill="white" font-size="17" font-weight="bold" text-anchor="middle">
               AI AGENT
             </text>
-            <text
-              x="500"
-              y="120"
-              fill="rgba(255,255,255,0.7)"
-              font-size="12"
-              font-family="monospace"
-              text-anchor="middle"
-            >
-              Summarize & Embed
+            <text x="435" y="140" fill="rgba(255,255,255,0.7)" font-size="11" font-family="monospace" text-anchor="middle">
+              Chunk · Summarize
+            </text>
+            <text x="435" y="156" fill="rgba(255,255,255,0.7)" font-size="11" font-family="monospace" text-anchor="middle">
+              Embed · Synthesize
             </text>
 
+            <!-- 3a. pgvector -->
             <rect
-              x="790"
-              y="70"
-              width="160"
-              height="60"
-              rx="8"
-              fill="rgba(255,255,255,0.05)"
-              stroke="#00D2FF"
-              stroke-width="2"
+              x="700" y="40" width="170" height="60" rx="8"
+              fill="rgba(255,255,255,0.05)" stroke="#00D2FF" stroke-width="2"
             />
-            <text
-              x="870"
-              y="105"
-              fill="white"
-              font-size="16"
-              font-family="monospace"
-              text-anchor="middle"
-            >
-              3. pgvector DB
+            <text x="785" y="68" fill="white" font-size="14" font-family="monospace" text-anchor="middle">
+              Vectors
+            </text>
+            <text x="785" y="86" fill="rgba(255,255,255,0.6)" font-size="11" font-family="monospace" text-anchor="middle">
+              pgvector
             </text>
 
-            <path
-              class="animated-path"
-              d="M210 100 L420 100"
-              stroke="#00D2FF"
-              stroke-width="3"
-              stroke-dasharray="10 5"
+            <!-- 3b. Knowledge Graph -->
+            <rect
+              x="700" y="160" width="170" height="60" rx="8"
+              fill="rgba(39, 224, 166, 0.12)" stroke="#27E0A6" stroke-width="2"
             />
-            <path
-              class="animated-path"
-              d="M580 100 L790 100"
-              stroke="#FF007F"
-              stroke-width="3"
-              stroke-dasharray="10 5"
-            />
+            <text x="785" y="188" fill="white" font-size="14" font-family="monospace" text-anchor="middle">
+              Knowledge Graph
+            </text>
+            <text x="785" y="206" fill="rgba(255,255,255,0.6)" font-size="11" font-family="monospace" text-anchor="middle">
+              entities · relations
+            </text>
 
-            <circle cx="0" cy="100" r="6" fill="#FFF">
-              <animate attributeName="cx" from="210" to="420" dur="2s" repeatCount="indefinite" />
+            <!-- flow lines -->
+            <path class="animated-path" d="M190 130 L350 130" stroke="#00D2FF" stroke-width="3" stroke-dasharray="10 5" />
+            <path class="animated-path" d="M520 120 L700 70" stroke="#FF007F" stroke-width="3" stroke-dasharray="10 5" />
+            <path class="animated-path" d="M520 140 L700 190" stroke="#27E0A6" stroke-width="3" stroke-dasharray="10 5" />
+
+            <!-- travelling pulses -->
+            <circle cx="0" cy="130" r="6" fill="#FFF">
+              <animate attributeName="cx" from="190" to="350" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="cy" from="130" to="130" dur="2s" repeatCount="indefinite" />
             </circle>
-            <circle cx="0" cy="100" r="6" fill="#FFF">
-              <animate attributeName="cx" from="580" to="790" dur="2s" repeatCount="indefinite" />
+            <circle r="6" fill="#FFF">
+              <animate attributeName="cx" from="520" to="700" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="cy" from="120" to="70" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle r="6" fill="#FFF">
+              <animate attributeName="cx" from="520" to="700" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="cy" from="140" to="190" dur="2s" repeatCount="indefinite" />
             </circle>
           </svg>
+          <p class="text-white opacity-50 font-monospace small mb-0 mt-3">
+            Vue 3 &nbsp;·&nbsp; FastAPI &nbsp;·&nbsp; Neon PostgreSQL + pgvector &nbsp;·&nbsp; Google Gemini
+          </p>
         </div>
       </div>
 
-      <div class="mb-5 text-center">
+      <div class="mb-5 pb-5 border-bottom border-secondary border-opacity-50 text-center">
         <h2 class="fw-bold text-gradient mb-5">Operational Use Cases</h2>
 
         <div class="carousel-container mx-auto" style="max-width: 800px">
@@ -249,6 +279,46 @@
           </div>
         </div>
       </div>
+
+      <div class="text-center">
+        <h2 class="fw-bold text-gradient mb-3">The Autonomous Frontier</h2>
+        <p class="text-white opacity-50 fs-5 mb-5">Where NeuralFortress is heading next.</p>
+        <div class="row g-4 text-start">
+          <div class="col-md-4">
+            <div class="glass-panel p-4 h-100 rounded-4 roadmap-card">
+              <h4 class="text-white fw-bold mb-2">
+                <i class="bi bi-plug text-pink me-2"></i>MCP Integration
+              </h4>
+              <p class="text-white opacity-75 lh-base m-0">
+                Expose the brain as a standard tool so any AI client &mdash; your code editor
+                included &mdash; can query your knowledge without leaving the workflow.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="glass-panel p-4 h-100 rounded-4 roadmap-card">
+              <h4 class="text-white fw-bold mb-2">
+                <i class="bi bi-broadcast text-info me-2"></i>Async Watchers
+              </h4>
+              <p class="text-white opacity-75 lh-base m-0">
+                Background agents that read sources overnight, deduplicate, and self-ingest &mdash;
+                so the brain reports what changed by morning, on its own.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="glass-panel p-4 h-100 rounded-4 roadmap-card">
+              <h4 class="text-white fw-bold mb-2">
+                <i class="bi bi-diagram-3 text-info me-2"></i>Deeper GraphRAG
+              </h4>
+              <p class="text-white opacity-75 lh-base m-0">
+                Richer multi-hop reasoning and community detection over the entity graph, turning
+                scattered notes into a navigable map of everything you know.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -266,7 +336,7 @@ const slides = [
     action:
       'You dump raw AWS whitepapers, Nginx proxy configurations, and Docker deployment logs directly into NeuralFortress without organizing them into folders.',
     magic:
-      "Months later, you ask the system, 'How did I route traffic for that containerized CRUD app?' The RAG engine instantly synthesizes a step-by-step architectural breakdown using strictly your past configurations."
+      "Months later you ask, 'How did I route traffic for that containerized CRUD app?' RAG_MODE instantly synthesizes a step-by-step architectural breakdown using strictly your past configurations."
   },
   {
     title: 'The Deep Tech Researcher',
@@ -274,15 +344,23 @@ const slides = [
     action:
       'You feed the system complex academic papers on Qiskit, quantum circuit optimization, and C++ performance limits.',
     magic:
-      "Because the system understands semantics rather than just keywords, you can query: 'Find the synergies between agentic AI loops and quantum algorithms in my notes.' It maps the conceptual overlap for you."
+      "In GRAPH_MODE you ask, 'How do agentic AI loops connect to quantum algorithms in my notes?' It walks the relationship graph across papers and shows you the multi-hop conceptual bridge &mdash; not just the nearest match."
   },
   {
     title: 'The Full-Stack Developer',
     icon: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#00D2FF" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`,
     action:
-      'You paste messy Vue.js boilerplate code, random FastAPI snippets, and bugs you solved on StackOverflow into the omni-input box.',
+      'You paste messy Vue.js boilerplate, random FastAPI snippets, and bugs you solved on StackOverflow into the omni-input box.',
     magic:
-      "Instead of searching through old GitHub repos, you ask 'Give me the boilerplate for my standard Vue 3 API call.' NeuralFortress hands you your exact, formatted code snippet instantly."
+      "AGENT_MODE doesn't just match keywords &mdash; it decides to search, reads the right note in full, and hands you your exact, formatted Vue 3 API-call boilerplate, reasoning through several steps to get there."
+  },
+  {
+    title: 'The Synthesizer',
+    icon: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FF007F" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>`,
+    action:
+      'You add a fresh note on a new deployment pattern, having forgotten you wrote something contradictory months ago.',
+    magic:
+      "Synthesis-on-ingest fires the instant you save: 'Contradicts your earlier note on blue-green rollouts.' The system caught the conflict before you did &mdash; it thinks when you write, not just when you ask."
   }
 ]
 
@@ -341,6 +419,34 @@ onUnmounted(() => {
   background: linear-gradient(45deg, rgba(255, 0, 127, 0.2), rgba(0, 210, 255, 0.2));
   pointer-events: none;
   border-radius: inherit;
+}
+
+/* Three Minds cards */
+.mind-card {
+  border: 1px solid rgba(0, 210, 255, 0.25);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.mind-card-pink {
+  border-color: rgba(255, 0, 127, 0.35);
+}
+.mind-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4), 0 0 25px rgba(0, 210, 255, 0.15);
+}
+.mode-tag {
+  font-family: monospace;
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+  font-weight: 700;
+}
+
+/* Roadmap cards */
+.roadmap-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: border-color 0.3s ease;
+}
+.roadmap-card:hover {
+  border-color: rgba(0, 210, 255, 0.4);
 }
 
 /* Flowchart Animation */
