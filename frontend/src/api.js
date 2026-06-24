@@ -47,6 +47,11 @@ askAgent(question) {
      },
 getKnowledgeGraph() {
    return apiClient.get('/knowledge-graph');
-   }
+   },
+   listWatchers()         { return apiClient.get('/watchers'); },
+addWatcher(url, label) { return apiClient.post('/watchers', { url, label }); },
+deleteWatcher(id)      { return apiClient.delete(`/watchers/${id}`); },
+toggleWatcher(id)      { return apiClient.post(`/watchers/${id}/toggle`); },
+runWatcher(id)         { return apiClient.post(`/watchers/${id}/run`); }
   
 };

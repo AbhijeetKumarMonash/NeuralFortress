@@ -48,6 +48,10 @@
       <div v-show="activeTab === 'archive'">
         <MatrixArchive ref="archiveRef" @archive-changed="refreshGraph" />
       </div>
+
+      <div v-show="activeTab === 'watchers'">
+  <AsyncWatchers @watcher-ingested="onWatcherIngested" />
+</div>
     </div>
   </div>
 </template>
@@ -59,13 +63,15 @@ import RetrievalTerminal from '@/components/RetrievalTerminal.vue';
 import MatrixArchive from '@/components/MatrixArchive.vue';
 import KnowledgeGraph from '@/components/KnowledgeGraph.vue';
 import EntityGraph from '@/components/EntityGraph.vue';
+import AsyncWatchers from '@/components/AsyncWatchers.vue';
 
 const tabs = [
   { id: 'ingest', label: '_INGEST' },
   { id: 'query', label: '_QUERY' },
   { id: 'map', label: '_NEURAL_MAP' },
   { id: 'archive', label: '_ARCHIVE' },
-  { id: 'knowledge', label: '_KNOWLEDGE' }
+  { id: 'knowledge', label: '_KNOWLEDGE' },
+  { id: 'watchers', label: '_WATCHERS' }
 ];
 
 const activeTab = ref('ingest');
@@ -81,6 +87,12 @@ const onGraphResult = (payload) => {
       entityGraphRef.value.highlightPath(payload.entities, payload.path);
     }
   });
+};
+// 3. add a handler — a watcher ingest should refresh archive + both graphs
+const onWatcherIngested = () => {
+  if (archiveRef.value) archiveRef.value.fetchDocuments();
+  if (graphRef.value) graphRef.value.loadGraph();
+  if (entityGraphRef.value) entityGraphRef.value.loadGraph();
 };
 
 // Refresh graph only

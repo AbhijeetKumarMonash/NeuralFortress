@@ -9,9 +9,15 @@ from google.genai import types # Added to configure the embedding size
 import numpy as np
 import knowledge_graph as kg
 
-from database import engine, Base, get_db
+from database import engine, Base, get_db , SessionLocal
 import models
+import re 
 
+import asyncio
+import hashlib
+import httpx
+from bs4 import BeautifulSoup
+from datetime import datetime, timezone
 # 1. Load Environment Variables
 load_dotenv()
 
@@ -60,88 +66,278 @@ async def get_status():
         "status": "online",
         "message": "Neural Core Initialized and Running"
     }
+
+# ----------------- Async Watchers config + helpers -----------------
+WATCH_INTERVAL_SECONDS = 60       # poll cadence; 60s for demo, raise to ~900 in production
+WATCHER_MIN_CHARS = 200            # ignore fetches that returned almost nothing
+WATCHER_MAX_CHARS = 12000          # cap per-fetch text (chunking handles the rest at ingest)
+
+
+
+async def fetch_url_text(url: str) -> str:
+    """Fetch a URL and return cleaned visible text.
+    Wikipedia article URLs are routed through the official REST summary API
+    (no scraping, no 403). Everything else is fetched and stripped with BeautifulSoup."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    # --- Wikipedia: use the sanctioned REST API instead of scraping the HTML ---
+    m = re.match(r"https?://(\w+)\.wikipedia\.org/wiki/(.+)", url)
+    if m:
+        lang, title = m.group(1), m.group(2)
+        api = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{title}"
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as c:
+            r = await c.get(api)
+            r.raise_for_status()
+            data = r.json()
+        extract = data.get("extract", "")
+        desc = data.get("description", "")
+        title_clean = data.get("title", title.replace("_", " "))
+        return f"{title_clean}. {desc}. {extract}"[:WATCHER_MAX_CHARS]
+
+    # --- everything else: fetch + strip ---
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as c:
+        r = await c.get(url)
+        r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "noscript", "svg"]):
+        tag.decompose()
+    text = " ".join(soup.get_text(separator=" ").split())
+    return text[:WATCHER_MAX_CHARS]
+
+
+# ----------------- Watcher polling engine -----------------
+async def poll_one_source(src, db: Session) -> dict:
+    """Fetch one source; ingest only if the content changed since last time."""
+    print(f"[WATCHER] polling {src.url}")
+    src_id = src.id
+    try:
+        text = await fetch_url_text(src.url)
+        if len(text) < WATCHER_MIN_CHARS:
+            src.last_status = f"error: only {len(text)} chars fetched"
+            src.last_checked = datetime.now(timezone.utc)
+            db.commit()
+            return {"watcher_id": src_id, "status": src.last_status}
+
+        h = hashlib.sha256(text.encode()).hexdigest()
+        if h == src.last_hash:
+            src.last_status = "unchanged"
+            src.last_checked = datetime.now(timezone.utc)
+            db.commit()
+            return {"watcher_id": src_id, "status": "unchanged"}
+
+        # content changed -> run the FULL pipeline (chunk·synthesize·graph-extract)
+        result = await perform_ingest(text, source=f"watcher:{src.url}", db=db)
+
+        # perform_ingest committed; re-fetch src to update its status fields safely
+        src = db.query(models.WatchedSource).filter(models.WatchedSource.id == src_id).first()
+        src.last_hash = h
+        src.last_status = f"ok: doc {result['document_id']}"
+        src.last_checked = datetime.now(timezone.utc)
+        db.commit()
+        print(f"[WATCHER] ingested {src.url} -> doc {result['document_id']}")
+        return {"watcher_id": src_id, "status": "ingested",
+                "document_id": result["document_id"], "insight": result["insight"]}
+
+    except Exception as e:
+        db.rollback()
+        try:
+            src = db.query(models.WatchedSource).filter(models.WatchedSource.id == src_id).first()
+            if src:
+                src.last_status = f"error: {str(e)[:120]}"
+                src.last_checked = datetime.now(timezone.utc)
+                db.commit()
+        except Exception:
+            pass
+        print(f"[WATCHER ERROR] {src_id}: {repr(e)}")
+        return {"watcher_id": src_id, "status": f"error: {e}"}
+    
+async def watcher_loop():
+    """Runs forever; every WATCH_INTERVAL_SECONDS it polls all active watchers."""
+    print(f"[WATCHER] loop started, interval={WATCH_INTERVAL_SECONDS}s")
+    while True:
+        try:
+            db = SessionLocal()
+            sources = db.query(models.WatchedSource).filter(
+                models.WatchedSource.active == 1
+            ).all()
+            for src in sources:
+                await poll_one_source(src, db)
+            db.close()
+        except Exception as e:
+            print(f"[WATCHER LOOP ERROR] {repr(e)}")
+        await asyncio.sleep(WATCH_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def start_watchers():
+    asyncio.create_task(watcher_loop())
+
+async def perform_ingest(raw_text: str, source: str, db: Session) -> dict:
+    """Core ingestion logic — chunk, embed, summarize, synthesize, graph-extract.
+    Used by both /api/ingest and the watcher loop."""
+    chunks = kg.chunk_text(raw_text, max_chars=MAX_EMBED_CHARS, overlap_chars=200)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Empty text")
+
+    chunk_vectors = kg.embed_texts(client, chunks)
+    doc_vector = np.mean(np.array(chunk_vectors, dtype=float), axis=0).tolist()
+
+    summary_prompt = (
+        "Analyze the following text. Provide a 2-sentence summary and extract 3-5 tags. "
+        "Format EXACTLY as:\nSummary: [text]\nTags: [tag1, tag2, tag3]\n\n"
+        f"Text: {raw_text[:12000]}"
+    )
+    ai_summary = client.models.generate_content(
+        model='gemini-2.5-flash', contents=summary_prompt
+    ).text
+
+    related = db.query(models.Document).order_by(
+        models.Document.embedding.cosine_distance(doc_vector)
+    ).limit(3).all()
+    if related:
+        ctx = "\n\n---\n\n".join(d.content[:2000] for d in related)
+        synthesis_prompt = (
+            "You are the synthesis engine of a second brain. A new note is being ingested. "
+            "Compare it to the related memories below. In ONE concise sentence, state the most "
+            "interesting connection, overlap, or contradiction. Start with a verb.\n\n"
+            f"EXISTING MEMORIES:\n{ctx}\n\nNEW NOTE:\n{raw_text[:4000]}"
+        )
+        insight = client.models.generate_content(
+            model='gemini-2.5-flash', contents=synthesis_prompt
+        ).text.strip()
+    else:
+        insight = "New neural pathway created. No prior related memories found."
+
+    new_document = models.Document(
+        content=(f"RAW_TEXT:\n{raw_text}\n\n"
+                 f"AI_ANALYSIS:\n{ai_summary}\n\n"
+                 f"SYNTHESIS_INSIGHT:\n{insight}"),
+        source=source,
+        embedding=doc_vector,
+    )
+    db.add(new_document)
+    db.flush()
+
+    for i, (c_text, c_vec) in enumerate(zip(chunks, chunk_vectors)):
+        db.add(models.DocumentChunk(
+            document_id=new_document.id, chunk_index=i, content=c_text, embedding=c_vec
+        ))
+
+    ents_n, rels_n = 0, 0
+    try:
+        triples = kg.extract_triples(client, raw_text)
+        ents_n, rels_n = kg.store_triples(db, models, triples, new_document.id)
+    except Exception as ge:
+        print(f"[GRAPH INGEST WARN] {repr(ge)}")
+
+    db.commit()
+    db.refresh(new_document)
+
+    return {
+        "status": "success",
+        "message": "Data successfully ingested and stored.",
+        "document_id": new_document.id,
+        "insight": insight,
+        "chunks": len(chunks),
+        "entities_extracted": ents_n,
+        "relationships_extracted": rels_n,
+    }
+
 # 9. The Data Ingestion Route (now with Agentic Synthesis)
 MAX_EMBED_CHARS = 1800  # safe per-chunk size, well under the ~2,048-token limit
+
+
+async def perform_ingest(raw_text: str, source: str | None, db: Session) -> dict:
+    """Core ingestion logic — chunk, embed, summarize, synthesize, graph-extract.
+    Used by both /api/ingest and the async watcher loop.
+
+    Caller is responsible for handling exceptions and rolling back if needed.
+    """
+    # A: chunk (1 chunk for short notes -> identical to old behaviour)
+    chunks = kg.chunk_text(raw_text, max_chars=MAX_EMBED_CHARS, overlap_chars=200)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Empty text")
+
+    # B: embed each chunk, then document vector = mean of chunk vectors
+    chunk_vectors = kg.embed_texts(client, chunks)
+    doc_vector = np.mean(np.array(chunk_vectors, dtype=float), axis=0).tolist()
+
+    # C: summary + tags (format must stay EXACT for the Vue parser)
+    summary_prompt = (
+        "Analyze the following text. Provide a 2-sentence summary and extract 3-5 tags. "
+        "Format EXACTLY as:\nSummary: [text]\nTags: [tag1, tag2, tag3]\n\n"
+        f"Text: {raw_text[:12000]}"
+    )
+    ai_summary = client.models.generate_content(
+        model='gemini-2.5-flash', contents=summary_prompt
+    ).text
+
+    # D: synthesis-on-ingest (unchanged) using the document vector
+    related = db.query(models.Document).order_by(
+        models.Document.embedding.cosine_distance(doc_vector)
+    ).limit(3).all()
+    if related:
+        ctx = "\n\n---\n\n".join(d.content[:2000] for d in related)
+        synthesis_prompt = (
+            "You are the synthesis engine of a second brain. A new note is being ingested. "
+            "Compare it to the related memories below. In ONE concise sentence, state the most "
+            "interesting connection, overlap, or contradiction. Start with a verb.\n\n"
+            f"EXISTING MEMORIES:\n{ctx}\n\nNEW NOTE:\n{raw_text[:4000]}"
+        )
+        insight = client.models.generate_content(
+            model='gemini-2.5-flash', contents=synthesis_prompt
+        ).text.strip()
+    else:
+        insight = "New neural pathway created. No prior related memories found."
+
+    # E: persist the document (same content format as before)
+    new_document = models.Document(
+        content=(f"RAW_TEXT:\n{raw_text}\n\n"
+                 f"AI_ANALYSIS:\n{ai_summary}\n\n"
+                 f"SYNTHESIS_INSIGHT:\n{insight}"),
+        source=source,
+        embedding=doc_vector,
+    )
+    db.add(new_document)
+    db.flush()  # get new_document.id
+
+    # F: persist chunks
+    for i, (c_text, c_vec) in enumerate(zip(chunks, chunk_vectors)):
+        db.add(models.DocumentChunk(
+            document_id=new_document.id, chunk_index=i, content=c_text, embedding=c_vec
+        ))
+
+    # G: GraphRAG extraction (entities + relationships). Never break ingest on failure.
+    ents_n, rels_n = 0, 0
+    try:
+        triples = kg.extract_triples(client, raw_text)
+        ents_n, rels_n = kg.store_triples(db, models, triples, new_document.id)
+    except Exception as ge:
+        print(f"[GRAPH INGEST WARN] {repr(ge)}")
+
+    db.commit()
+    db.refresh(new_document)
+
+    return {
+        "status": "success",
+        "message": "Data successfully ingested and stored.",
+        "document_id": new_document.id,
+        "insight": insight,
+        "chunks": len(chunks),
+        "entities_extracted": ents_n,
+        "relationships_extracted": rels_n,
+    }
+
 
 @app.post("/api/ingest")
 async def ingest_data(payload: IngestRequest, db: Session = Depends(get_db)):
     try:
-        raw_text = payload.text
-
-        # A: chunk (1 chunk for short notes -> identical to old behaviour)
-        chunks = kg.chunk_text(raw_text, max_chars=MAX_EMBED_CHARS, overlap_chars=200)
-        if not chunks:
-            raise HTTPException(status_code=400, detail="Empty text")
-
-        # B: embed each chunk, then document vector = mean of chunk vectors
-        chunk_vectors = kg.embed_texts(client, chunks)
-        doc_vector = np.mean(np.array(chunk_vectors, dtype=float), axis=0).tolist()
-
-        # C: summary + tags (format must stay EXACT for the Vue parser)
-        summary_prompt = (
-            "Analyze the following text. Provide a 2-sentence summary and extract 3-5 tags. "
-            "Format EXACTLY as:\nSummary: [text]\nTags: [tag1, tag2, tag3]\n\n"
-            f"Text: {raw_text[:12000]}"
-        )
-        ai_summary = client.models.generate_content(
-            model='gemini-2.5-flash', contents=summary_prompt
-        ).text
-
-        # D: synthesis-on-ingest (unchanged) using the document vector
-        related = db.query(models.Document).order_by(
-            models.Document.embedding.cosine_distance(doc_vector)
-        ).limit(3).all()
-        if related:
-            ctx = "\n\n---\n\n".join(d.content[:2000] for d in related)
-            synthesis_prompt = (
-                "You are the synthesis engine of a second brain. A new note is being ingested. "
-                "Compare it to the related memories below. In ONE concise sentence, state the most "
-                "interesting connection, overlap, or contradiction. Start with a verb.\n\n"
-                f"EXISTING MEMORIES:\n{ctx}\n\nNEW NOTE:\n{raw_text[:4000]}"
-            )
-            insight = client.models.generate_content(
-                model='gemini-2.5-flash', contents=synthesis_prompt
-            ).text.strip()
-        else:
-            insight = "New neural pathway created. No prior related memories found."
-
-        # E: persist the document (same content format as before)
-        new_document = models.Document(
-            content=(f"RAW_TEXT:\n{raw_text}\n\n"
-                     f"AI_ANALYSIS:\n{ai_summary}\n\n"
-                     f"SYNTHESIS_INSIGHT:\n{insight}"),
-            source=payload.source,
-            embedding=doc_vector,
-        )
-        db.add(new_document)
-        db.flush()  # get new_document.id
-
-        # F: persist chunks
-        for i, (c_text, c_vec) in enumerate(zip(chunks, chunk_vectors)):
-            db.add(models.DocumentChunk(
-                document_id=new_document.id, chunk_index=i, content=c_text, embedding=c_vec
-            ))
-
-        # G: GraphRAG extraction (entities + relationships). Never break ingest on failure.
-        ents_n, rels_n = 0, 0
-        try:
-            triples = kg.extract_triples(client, raw_text)
-            ents_n, rels_n = kg.store_triples(db, models, triples, new_document.id)
-        except Exception as ge:
-            print(f"[GRAPH INGEST WARN] {repr(ge)}")
-
-        db.commit()
-        db.refresh(new_document)
-
-        return {
-            "status": "success",
-            "message": "Data successfully ingested and stored.",
-            "document_id": new_document.id,
-            "insight": insight,
-            "chunks": len(chunks),
-            "entities_extracted": ents_n,
-            "relationships_extracted": rels_n,
-        }
+        return await perform_ingest(payload.text, payload.source, db)
     except HTTPException:
         raise
     except Exception as e:
@@ -418,3 +614,62 @@ async def knowledge_graph_view(db: Session = Depends(get_db)):
         edges.append({"from": r.source_id, "to": r.target_id, "label": r.predicate})
     return {"nodes": nodes, "edges": edges,
             "entity_count": len(nodes), "relationship_count": len(edges)}
+
+# ----------------- Watcher CRUD endpoints -----------------
+class WatcherCreate(BaseModel):
+    url: str
+    label: str | None = None
+
+
+@app.post("/api/watchers")
+async def add_watcher(payload: WatcherCreate, db: Session = Depends(get_db)):
+    try:
+        src = models.WatchedSource(
+            url=payload.url,
+            label=payload.label or payload.url[:40],
+        )
+        db.add(src); db.commit(); db.refresh(src)
+        return {"id": src.id, "url": src.url, "label": src.label, "active": src.active}
+    except Exception as e:
+        db.rollback()
+        print(f"[WATCHER ADD ERROR] {repr(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/watchers")
+async def list_watchers(db: Session = Depends(get_db)):
+    rows = db.query(models.WatchedSource).order_by(models.WatchedSource.id.desc()).all()
+    return {"watchers": [{
+        "id": s.id,
+        "url": s.url,
+        "label": s.label,
+        "last_checked": s.last_checked.isoformat() if s.last_checked else None,
+        "last_status": s.last_status,
+        "active": s.active,
+    } for s in rows]}
+
+
+@app.delete("/api/watchers/{wid}")
+async def delete_watcher(wid: int, db: Session = Depends(get_db)):
+    src = db.query(models.WatchedSource).filter(models.WatchedSource.id == wid).first()
+    if not src:
+        raise HTTPException(status_code=404, detail="Watcher not found")
+    db.delete(src); db.commit()
+    return {"status": "deleted", "id": wid}
+
+
+@app.post("/api/watchers/{wid}/toggle")
+async def toggle_watcher(wid: int, db: Session = Depends(get_db)):
+    src = db.query(models.WatchedSource).filter(models.WatchedSource.id == wid).first()
+    if not src:
+        raise HTTPException(status_code=404, detail="Watcher not found")
+    src.active = 0 if src.active else 1
+    db.commit()
+    return {"id": wid, "active": src.active}
+
+@app.post("/api/watchers/{wid}/run")
+async def run_watcher_now(wid: int, db: Session = Depends(get_db)):
+    src = db.query(models.WatchedSource).filter(models.WatchedSource.id == wid).first()
+    if not src:
+        raise HTTPException(status_code=404, detail="Watcher not found")
+    return await poll_one_source(src, db)

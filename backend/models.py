@@ -40,3 +40,14 @@ class Relationship(Base):
     predicate = Column(String, nullable=False)
     document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class WatchedSource(Base):
+    __tablename__ = "watched_sources"
+    id           = Column(Integer, primary_key=True, index=True)
+    url          = Column(String, nullable=False)
+    label        = Column(String, nullable=True)         # friendly name for the UI
+    last_hash    = Column(String, nullable=True)         # SHA-256 of last seen content (dedupe)
+    last_checked = Column(DateTime(timezone=True), nullable=True)
+    last_status  = Column(String, nullable=True)         # 'ok' | 'unchanged' | 'error: ...'
+    active       = Column(Integer, default=1)            # 1 = polling, 0 = paused
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
